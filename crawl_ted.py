@@ -25,6 +25,28 @@ def trans_xml(ctn):
         ctn = re.sub(pat, repl, ctn)
     return ctn
 
+def run_crawl(url, f_name):
+    rsp = requests.get(url)
+    soup = BeautifulSoup(rsp.text, "html.parser")
+    script_tags = soup.find_all('script', type="application/ld+json")
+
+    if len(script_tags) > 1:
+        print("check error!")
+    else:
+        cnt = script_tags[0]
+        json_cnt = json.loads(cnt.text)
+        #rslt = re.split(r'\.', json_cnt["transcript"])
+        tmp = json_cnt["transcript"]
+        rslt = trans_xml(tmp)
+
+        #f_name = "transcript.txt"
+        f_name = str(f_name) + ".txt"
+        with open(f_name, "w") as fw:
+            fw.write(rslt)
+
+        #tk.Label(self.window, text="Finish!").grid(row=5, column=2)
+
+
 class gui():
     def __init__(self):
         self.window = tk.Tk()
@@ -46,7 +68,9 @@ class gui():
         self.f_name.grid(row=1, column=1)
 
         #btn = tk.Button(window, text="Enter", command=lambda: run_crawl(url, f_name))
-        btn = tk.Button(self.window, text="Enter", command=lambda: self.run_crawl())
+        #btn = tk.Button(self.window, text="Enter", command=lambda: self.run_crawl())
+
+        btn = tk.Button(self.window, text="Enter", command=lambda: run_crawl(self.url.get(), self.f_name.get()))
         btn.grid(row=5, column=1)
 
         t = threading.Thread(target=self.chk_state)
@@ -54,6 +78,7 @@ class gui():
         self.window.mainloop()
         self._stop = True  # control the life cycle of thread
 
+    '''
     def run_crawl(self):
         rsp = requests.get(self.url.get())
         soup = BeautifulSoup(rsp.text, "html.parser")
@@ -76,6 +101,7 @@ class gui():
             self.reset()
             #tk.Label(self.window, text="Finish!").grid(row=5, column=2)
             self.status.set("Finish!")
+    '''
     
     def reset(self):
         self.url.delete(0, tk.END)
@@ -87,4 +113,9 @@ class gui():
                 self.status.set("")
             time.sleep(1)
 
-app = gui()
+
+#app = gui()
+
+url = input("enter the url of ted: ")
+f_name = input("Enter the name of output file: ")
+run_crawl(url, f_name)
