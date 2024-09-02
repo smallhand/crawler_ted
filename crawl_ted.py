@@ -5,49 +5,57 @@ import tkinter as tk
 from bs4 import BeautifulSoup
 import re, json
 import threading
-import time
+import time, os
+
+import openpyxl
+from openpyxl.styles import Font
  
 #time: 2hr, 30min
 
-
 #url = "https://www.ted.com/talks/jessica_apotheker_what_will_happen_to_marketing_in_the_age_of_ai"
-#url = input("Enter the url of TED: ")
-#f_name = input("Enter the name of output file: ")
-#driver = webdriver.Chrome()
-#driver.get(url)
-# btn = driver.find_element(By.XPATH, '//button[text()="Read transcript"]')
-# btn.click()
-#driver.quit()
-
-def trans_xml(ctn):
-    replacements = [("&quot;", '"'), ("&amp;", "&"), ("&apos;", "'"), ("&It;", "<"), ("&gt;", ">")]
-    for pat, repl in replacements:
-        ctn = re.sub(pat, repl, ctn)
-    return ctn
-
-def run_crawl(url, f_name):
-    rsp = requests.get(url)
-    soup = BeautifulSoup(rsp.text, "html.parser")
-    script_tags = soup.find_all('script', type="application/ld+json")
-
-    if len(script_tags) > 1:
-        print("check error!")
-    else:
-        cnt = script_tags[0]
-        json_cnt = json.loads(cnt.text)
-        #rslt = re.split(r'\.', json_cnt["transcript"])
-        tmp = json_cnt["transcript"]
-        rslt = trans_xml(tmp)
-
-        #f_name = "transcript.txt"
-        f_name = str(f_name) + ".txt"
-        with open(f_name, "w") as fw:
-            fw.write(rslt)
-
-        #tk.Label(self.window, text="Finish!").grid(row=5, column=2)
 
 
-class gui():
+def write_excel(ctn, title,  out_dir):
+    s_ep = f"{title}" # title
+
+    wb = openpyxl.Workbook()
+    sheet = wb.worksheets[0]
+
+    sheet.oddHeader.center.text  = s_ep
+    sheet.evenHeader.center.text = s_ep
+    sheet.oddHeader.center.font  = "Arial Black"
+    sheet.evenHeader.center.font = "Arial Black"
+
+    sheet.oddHeader.center.size  = 20
+    sheet.evenHeader.center.size = 20
+
+    # ==== right page
+    sheet.oddHeader.right.text  = "&P / &N"
+    sheet.evenHeader.right.text = "&P / &N"
+    sheet.oddHeader.right.font  = "Arial,Bold"
+    sheet.evenHeader.right.font = "Arial,Bold"
+
+    font = Font(name="Arial", size=16)
+    ctns = ctn.splitlines()
+    lens = len(ctns)
+    for x in range(lens):
+        cellref=sheet.cell(row=x + 1, column=1)
+        sheet.row_dimensions[x + 1].height = 60
+        cellref.value = ctns[x]
+        cellref.font = font
+    
+    f_name = f"{title}"
+    f_name = str(f_name) + ".xlsx"
+    print(f_name)
+    
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    out_path = f"{out_dir}/{f_name}"
+    wb.save(out_path)
+
+
+class TedCrawler():
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("Transcript crawler")
@@ -68,40 +76,79 @@ class gui():
         self.f_name.grid(row=1, column=1)
 
         #btn = tk.Button(window, text="Enter", command=lambda: run_crawl(url, f_name))
-        #btn = tk.Button(self.window, text="Enter", command=lambda: self.run_crawl())
+        btn = tk.Button(self.window, text="Enter", command=lambda: self.run_crawl())
 
-        btn = tk.Button(self.window, text="Enter", command=lambda: run_crawl(self.url.get(), self.f_name.get()))
+        #btn = tk.Button(self.window, text="Enter", command=lambda: run_crawl(self.url.get(), self.f_name.get()))
         btn.grid(row=5, column=1)
 
-        t = threading.Thread(target=self.chk_state)
-        t.start()
+        self.t = threading.Thread(target=self.chk_state)
+        self.t.start()
         self.window.mainloop()
         self._stop = True  # control the life cycle of thread
 
-    '''
+    @classmethod
+    def trans_xml(cls, ctn):
+        replacements = [("&quot;", '"'), ("&amp;", "&"), ("&apos;", "'"), ("&It;", "<"), ("&gt;", ">")]
+        for pat, repl in replacements:
+            ctn = re.sub(pat, repl, ctn)
+        return ctn
+
+    @classmethod
+    def endline(cls, text):
+        replacements = [("?", '\?\n'), (".", "\.\n"), ("!", "!\n"), ('\w+"', '\w+"\n'), (")", ")\n")]
+        for pat, repl in replacements:
+            ctn = re.sub(pat, repl, text)
+        return ctn
+
+
+
     def run_crawl(self):
         rsp = requests.get(self.url.get())
         soup = BeautifulSoup(rsp.text, "html.parser")
         script_tags = soup.find_all('script', type="application/ld+json")
 
+        if (len(script_tags) == 0):
+            print("Parsing error!, Check your url")
+            self.window.quit()
+            self.t.join()
+            exit(0)
+
         if len(script_tags) > 1:
             tk.Label(self.window, text="Check Error!").grid(row=10, column=2)
             print("check error!")
         else:
+            f_name = self.f_name.get()
+
             cnt = script_tags[0]
             json_cnt = json.loads(cnt.text)
             #rslt = re.split(r'\.', json_cnt["transcript"])
             tmp = json_cnt["transcript"]
-            rslt = trans_xml(tmp)
+            rslt = self.trans_xml(tmp)
 
-            #f_name = "transcript.txt"
+            rslt = re.sub(r'([!?.])', r'\1\n', rslt)
+
+            #new_words = ""
+            #for line in rslt.splitlines():
+            #    words = re.split(r'\s+', line)
+            #    if (len(words) > 10):
+            #        lines = [' '.join(words[i:i+10]) for i in range(0, len(words), 10)]
+            #        temp = '\n'.join(lines)
+            #        new_words += temp + '\n'
+            #    else:
+            #        new_words += line + '\n'
+
+            #write_excel(new_words, f_name, "result")
+
             f_name = self.f_name.get() + ".txt"
+
+            folder = os.path.dirname(f_name)
+            if folder != "" and not os.path.exists(folder):
+                os.makedirs(folder)
             with open(f_name, "w") as fw:
                 fw.write(rslt)
             self.reset()
             #tk.Label(self.window, text="Finish!").grid(row=5, column=2)
             self.status.set("Finish!")
-    '''
     
     def reset(self):
         self.url.delete(0, tk.END)
@@ -114,8 +161,8 @@ class gui():
             time.sleep(1)
 
 
-#app = gui()
+app = TedCrawler()
 
-url = input("enter the url of ted: ")
-f_name = input("Enter the name of output file: ")
-run_crawl(url, f_name)
+#url = input("enter the url of ted: ")
+#f_name = input("Enter the name of output file: ")
+#run_crawl(url, f_name)
