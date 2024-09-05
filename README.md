@@ -1,6 +1,6 @@
-# crawler_ted
+# TED Talks crawler
 ## Purpose
-* crawl the transcript of the TED video, and then output to a text file
+* crawl the transcript of the TED Talks video (https://www.ted.com/talks), and then output to a text file
 
 ## Use method
 $ python ./craw_ted.py
