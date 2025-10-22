@@ -2,6 +2,13 @@
 ## Purpose
 * crawl the transcript of the TED Talks video (https://www.ted.com/talks), and then output to a text file
 
+## Prerequisites
+Install following modules
+* requests
+* beautifulsoup4
+* openpyxl
+  
+
 ## Use method
 $ python ./craw_ted.py
 
