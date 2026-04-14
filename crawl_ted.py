@@ -1,9 +1,6 @@
 import requests
 import tkinter as tk
-#from selenium import webdriver
-#from selenium.webdriver.common.by import By
-from bs4 import BeautifulSoup
-import re, json
+import re 
 import threading
 import time, os
 
@@ -101,54 +98,53 @@ class TedCrawler():
         return ctn
 
 
-
     def run_crawl(self):
-        rsp = requests.get(self.url.get())
-        soup = BeautifulSoup(rsp.text, "html.parser")
-        script_tags = soup.find_all('script', type="application/ld+json")
-
-        if (len(script_tags) == 0):
-            print("Parsing error!, Check your url")
-            self.window.quit()
-            self.t.join()
-            exit(0)
-
-        if len(script_tags) > 1:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        
+        rsp = requests.get(self.url.get(), headers=headers)
+        match = re.search(r'pm(\d+)-im(\d+)', rsp.text)
+        if not match:
             tk.Label(self.window, text="Check Error!").grid(row=10, column=2)
-            print("check error!")
-        else:
-            f_name = self.f_name.get()
+            print("❌ can't find projectMasterId 或 introMasterId")
+            return None
+        
+        pm_id = match.group(1)
+        im_id = match.group(2)
 
-            cnt = script_tags[0]
-            json_cnt = json.loads(cnt.text)
-            #rslt = re.split(r'\.', json_cnt["transcript"])
-            tmp = json_cnt["transcript"]
-            rslt = self.trans_xml(tmp)
+        vtt_url = f"https://hls.ted.com/project_masters/{pm_id}/subtitles/en/full.vtt?intro_master_id={im_id}"
+        vtt_response = requests.get(vtt_url, headers=headers)
+        vtt_response.raise_for_status()
+        vtt_text = vtt_response.text
 
-            rslt = re.sub(r'([!?.])', r'\1\n', rslt)
+        clean_text = self.clean_vtt_content(vtt_text)
 
-            #new_words = ""
-            #for line in rslt.splitlines():
-            #    words = re.split(r'\s+', line)
-            #    if (len(words) > 10):
-            #        lines = [' '.join(words[i:i+10]) for i in range(0, len(words), 10)]
-            #        temp = '\n'.join(lines)
-            #        new_words += temp + '\n'
-            #    else:
-            #        new_words += line + '\n'
+        f_name = self.f_name.get() + ".txt"
+        folder = os.path.dirname(f_name)
 
-            #write_excel(new_words, f_name, "result")
+        if folder != "" and not os.path.exists(folder):
+            os.makedirs(folder)
+        with open(f_name, "w") as fw:
+            fw.write(clean_text)
+        self.reset()
+        self.status.set("Finish!")
+    
+    def clean_vtt_content(self, vtt_text):
+        lines = vtt_text.splitlines()
+        final_lines = []
+        
+        for line in lines:
+            # remove WEBVTT header, timestamp (contains -->), and blank line
+            if line.strip() == "WEBVTT" or "-->" in line or not line.strip():
+                continue
+            
+            # remove HTML tag (eg. <c.color...>)
+            clean_line = re.sub(r'<[^>]+>', '', line)
+            final_lines.append(clean_line)
+        
+        return " ".join(final_lines)
 
-            f_name = self.f_name.get() + ".txt"
-
-            folder = os.path.dirname(f_name)
-            if folder != "" and not os.path.exists(folder):
-                os.makedirs(folder)
-            with open(f_name, "w") as fw:
-                fw.write(rslt)
-            self.reset()
-            #tk.Label(self.window, text="Finish!").grid(row=5, column=2)
-            self.status.set("Finish!")
     
     def reset(self):
         self.url.delete(0, tk.END)
